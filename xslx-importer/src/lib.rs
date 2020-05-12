@@ -19,6 +19,22 @@ pub enum ImportError {
     OpeningError(#[from] calamine::XlsxError),
     #[error("unrecognized file element")]
     InvalidFileType,
+    #[error("unexpected cell content")]
+    UnexpectedCellContent,
+}
+
+fn read_string_cell(cell: &DataType) -> Result<&String, ImportError> {
+    match cell {
+        DataType::String(txt) => Ok(txt),
+        _ => Err(ImportError::UnexpectedCellContent),
+    }
+}
+
+fn read_float_cell(cell: &DataType) -> Result<f64, ImportError> {
+    match cell {
+        DataType::Float(value) => Ok(*value),
+        _ => Err(ImportError::UnexpectedCellContent),
+    }
 }
 
 // R: Reader<RS = BufReader<File>>,
@@ -54,26 +70,54 @@ pub fn import_xslx<P: AsRef<Path>>(path: P) -> Result<WeeklyBasketOffer, ImportE
     let mut reached_botom = false;
     while !reached_botom {
         if let Some(cells) = rows.next() {
-            // Retrieve cells as reference string
-            let string_cells: Vec<&String> = cells
-                .iter()
-                .flat_map(|c| match c {
-                    DataType::String(s) => Some(s),
-                    _ => None,
-                })
-                .collect();
+            if cells.len() < 5 {
+                continue;
+            }
 
-            // If we have a category | or end
-            if string_cells.len() == 1 {
-                if string_cells[0] == "TOTAL" {
-                    reached_botom = true;
-                } else {
-                    let category = Category::new(string_cells[0]);
+            // Retrieve cells as reference string
+            let non_empty_cells_count = cells
+                .iter()
+                .filter(|c| match c {
+                    DataType::Empty => false,
+                    _ => true,
+                })
+                .count();
+
+            let string_cells_count = cells
+                .iter()
+                .filter(|c| match c {
+                    DataType::String(_) => true,
+                    _ => false,
+                })
+                .count();
+            // Work only of the first is non empty
+            if string_cells_count < 1 {
+                continue;
+            }
+
+            if string_cells_count == 1 && non_empty_cells_count == 1 {
+                // Detect category
+                if let DataType::String(txt) = &cells[0] {
+                    println!("New category: {:?}", txt);
+                    let category = Category::new(txt);
                     categories.push(category);
                 }
-            } else if string_cells.len() == 2 {
+            } else if string_cells_count == 1 && non_empty_cells_count == 2 {
+                if let DataType::String(end) = &cells[3] {
+                    if end == "TOTAL" {
+                        reached_botom = true;
+                    }
+                }
+            } else if non_empty_cells_count >= 3 {
+                let title = read_string_cell(&cells[0])?.clone();
+                let unit = read_string_cell(&cells[1])
+                    .unwrap_or(&"1".to_owned())
+                    .clone();
+                let price = read_float_cell(&cells[2])?;
+
                 if let Some(last) = categories.last_mut() {
-                    let item = Item::new(string_cells[0], string_cells[1]);
+                    let item = Item::new(title, unit, price);
+                    // println!("New item: {:?}", item);
                     last.add_item(item);
                 }
             }
@@ -124,7 +168,7 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    #[test]
+    // #[test]
     fn print_elements() {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("assets/test.xlsx");
@@ -136,12 +180,13 @@ mod tests {
             for row in sheets.rows() {
                 let string = row
                     .iter()
-                    .flat_map(|e| {
-                        if let DataType::String(txt) = e {
-                            Some(txt.clone())
-                        } else {
-                            None
-                        }
+                    .map(|e| match e {
+                        DataType::String(txt) => format!("Text: {}", txt),
+                        DataType::Float(value) => format!("Float: {}", value),
+                        DataType::Bool(value) => format!("Bool: {}", value),
+                        DataType::Int(value) => format!("Int: {}", value),
+                        DataType::Error(value) => format!("Err: {}", value),
+                        DataType::Empty => "Empty".to_owned(),
                     })
                     .collect::<Vec<_>>()
                     .join("|");
@@ -158,6 +203,8 @@ mod tests {
         d.push("assets/test.xlsx");
         println!("Opening: {}", d.display());
 
-        let importer = import_xslx(d).expect("Should parse correctly");
+        let week_offer = import_xslx(d).expect("Should parse correctly");
+
+        assert_eq!(10, week_offer.categories().len());
     }
 }

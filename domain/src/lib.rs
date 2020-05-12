@@ -4,13 +4,15 @@ use chrono::{Date, Utc};
 pub struct Item {
     title: String,
     unit: String,
+    price: f64,
 }
 
 impl Item {
-    pub fn new<T: Into<String>, U: Into<String>>(title: T, unit: U) -> Item {
+    pub fn new<T: Into<String>, U: Into<String>>(title: T, unit: U, price: f64) -> Item {
         Item {
             title: title.into(),
             unit: unit.into(),
+            price,
         }
     }
 }
@@ -64,7 +66,7 @@ mod tests {
         // Fruits
         let mut fruits = Category::new("fruits");
 
-        let item = Item::new("Fraise", "250 gr");
+        let item = Item::new("Fraise", "250 gr", 1.0);
         fruits.add_item(item);
 
         assert_eq!(1, fruits.items.len());
