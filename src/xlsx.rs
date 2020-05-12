@@ -4,7 +4,7 @@ use log::warn;
 use std::path::Path;
 use thiserror::Error;
 
-use tilleuls_domain::{Category, Item, WeeklyBasketOffer};
+use super::models::{Category, Item, WeeklyBasketOffer};
 
 const HEADER: &'static str = "Bon de commande N°";
 const COMMAND_SHEET_NAME: &'static str = "Commande";
@@ -179,7 +179,7 @@ fn has_product_columns(rows: &mut Rows<DataType>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::import_xslx;
+    use super::import_xslx;
     // use calamine::{open_workbook, DataType, Reader, Xlsx};
     use std::path::PathBuf;
     fn init() {
