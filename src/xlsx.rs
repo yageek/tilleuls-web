@@ -88,7 +88,7 @@ fn read_item_row(cells: &[DataType]) -> Result<Option<Item>, ImportError> {
 }
 
 /// Import and decode on xslx file provided by the farm
-pub fn import_xslx<P: AsRef<Path>>(path: P) -> Result<WeeklyBasketOffer, ImportError> {
+pub fn import_xlsx<P: AsRef<Path>>(path: P) -> Result<WeeklyBasketOffer, ImportError> {
     let mut workbook: Xlsx<_> = open_workbook(path)?;
     // We validate the known shape of the current formular.
     // For now, we assume one worksheet exists with two elements
@@ -179,7 +179,7 @@ fn has_product_columns(rows: &mut Rows<DataType>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::import_xslx;
+    use super::import_xlsx;
     // use calamine::{open_workbook, DataType, Reader, Xlsx};
     use std::path::PathBuf;
     fn init() {
@@ -221,7 +221,7 @@ mod tests {
         d.push("assets/test.xlsx");
         println!("Opening: {}", d.display());
 
-        let week_offer = import_xslx(d).expect("Should parse correctly");
+        let week_offer = import_xlsx(d).expect("Should parse correctly");
 
         assert_eq!(10, week_offer.categories().len());
     }
