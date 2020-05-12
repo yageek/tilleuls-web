@@ -40,7 +40,7 @@ impl Category {
         &self.items
     }
 }
-
+#[derive(Debug)]
 pub struct WeeklyBasketOffer {
     #[allow(dead_code)]
     date: Date<Utc>,

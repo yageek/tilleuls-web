@@ -37,7 +37,57 @@ fn read_float_cell(cell: &DataType) -> Result<f64, ImportError> {
     }
 }
 
-// R: Reader<RS = BufReader<File>>,
+fn is_string_cell(cell: &DataType) -> bool {
+    match cell {
+        DataType::String(_) => true,
+        _ => false,
+    }
+}
+
+fn is_float_cell(cell: &DataType) -> bool {
+    match cell {
+        DataType::Float(_) => true,
+        _ => false,
+    }
+}
+
+fn is_empty_cell(cell: &DataType) -> bool {
+    match cell {
+        DataType::Empty => true,
+        _ => false,
+    }
+}
+
+fn is_end_of_items(cells: &[DataType]) -> bool {
+    match &cells[3] {
+        DataType::String(txt) if txt == "TOTAL" => true,
+        _ => false,
+    }
+}
+
+fn read_category_row(cells: &[DataType]) -> Option<Category> {
+    if is_string_cell(&cells[0]) && is_empty_cell(&cells[1]) && is_empty_cell(&cells[2]) {
+        let txt = read_string_cell(&cells[0]).unwrap();
+        Some(Category::new(txt))
+    } else {
+        None
+    }
+}
+
+fn read_item_row(cells: &[DataType]) -> Result<Option<Item>, ImportError> {
+    if is_string_cell(&cells[0]) && is_float_cell(&cells[2]) {
+        let title = read_string_cell(&cells[0])?.clone();
+        let unit = read_string_cell(&cells[1])
+            .unwrap_or(&"1".to_owned())
+            .clone();
+        let price = read_float_cell(&cells[2])?;
+        Ok(Some(Item::new(title, unit, price)))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Import and decode on xslx file provided by the farm
 pub fn import_xslx<P: AsRef<Path>>(path: P) -> Result<WeeklyBasketOffer, ImportError> {
     let mut workbook: Xlsx<_> = open_workbook(path)?;
     // We validate the known shape of the current formular.
@@ -74,51 +124,19 @@ pub fn import_xslx<P: AsRef<Path>>(path: P) -> Result<WeeklyBasketOffer, ImportE
                 continue;
             }
 
-            // Retrieve cells as reference string
-            let non_empty_cells_count = cells
-                .iter()
-                .filter(|c| match c {
-                    DataType::Empty => false,
-                    _ => true,
-                })
-                .count();
-
-            let string_cells_count = cells
-                .iter()
-                .filter(|c| match c {
-                    DataType::String(_) => true,
-                    _ => false,
-                })
-                .count();
-            // Work only of the first is non empty
-            if string_cells_count < 1 {
-                continue;
-            }
-
-            if string_cells_count == 1 && non_empty_cells_count == 1 {
-                // Detect category
-                if let DataType::String(txt) = &cells[0] {
-                    println!("New category: {:?}", txt);
-                    let category = Category::new(txt);
-                    categories.push(category);
-                }
-            } else if string_cells_count == 1 && non_empty_cells_count == 2 {
-                if let DataType::String(end) = &cells[3] {
-                    if end == "TOTAL" {
-                        reached_botom = true;
+            if is_end_of_items(cells) {
+                reached_botom = true;
+            } else if let Some(category) = read_category_row(cells) {
+                categories.push(category);
+            } else {
+                match read_item_row(cells) {
+                    Ok(Some(item)) => {
+                        if let Some(last) = categories.last_mut() {
+                            last.add_item(item)
+                        }
                     }
-                }
-            } else if non_empty_cells_count >= 3 {
-                let title = read_string_cell(&cells[0])?.clone();
-                let unit = read_string_cell(&cells[1])
-                    .unwrap_or(&"1".to_owned())
-                    .clone();
-                let price = read_float_cell(&cells[2])?;
-
-                if let Some(last) = categories.last_mut() {
-                    let item = Item::new(title, unit, price);
-                    // println!("New item: {:?}", item);
-                    last.add_item(item);
+                    Err(e) => return Err(e),
+                    _ => (),
                 }
             }
         } else {
@@ -162,38 +180,38 @@ fn has_product_columns(rows: &mut Rows<DataType>) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::import_xslx;
-    use calamine::{open_workbook, DataType, Reader, Xlsx};
+    // use calamine::{open_workbook, DataType, Reader, Xlsx};
     use std::path::PathBuf;
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
     // #[test]
-    fn print_elements() {
-        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        d.push("assets/test.xlsx");
-        println!("Opening: {}", d.display());
+    // fn print_elements() {
+    //     let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    //     d.push("assets/test.xlsx");
+    //     println!("Opening: {}", d.display());
 
-        let mut workbook: Xlsx<_> = open_workbook(d).unwrap();
+    //     let mut workbook: Xlsx<_> = open_workbook(d).unwrap();
 
-        if let Some(Ok(sheets)) = workbook.worksheet_range("Commande") {
-            for row in sheets.rows() {
-                let string = row
-                    .iter()
-                    .map(|e| match e {
-                        DataType::String(txt) => format!("Text: {}", txt),
-                        DataType::Float(value) => format!("Float: {}", value),
-                        DataType::Bool(value) => format!("Bool: {}", value),
-                        DataType::Int(value) => format!("Int: {}", value),
-                        DataType::Error(value) => format!("Err: {}", value),
-                        DataType::Empty => "Empty".to_owned(),
-                    })
-                    .collect::<Vec<_>>()
-                    .join("|");
-                println!("Rows: {}", string);
-            }
-        }
-    }
+    //     if let Some(Ok(sheets)) = workbook.worksheet_range("Commande") {
+    //         for row in sheets.rows() {
+    //             let string = row
+    //                 .iter()
+    //                 .map(|e| match e {
+    //                     DataType::String(txt) => format!("Text: {}", txt),
+    //                     DataType::Float(value) => format!("Float: {}", value),
+    //                     DataType::Bool(value) => format!("Bool: {}", value),
+    //                     DataType::Int(value) => format!("Int: {}", value),
+    //                     DataType::Error(value) => format!("Err: {}", value),
+    //                     DataType::Empty => "Empty".to_owned(),
+    //                 })
+    //                 .collect::<Vec<_>>()
+    //                 .join("|");
+    //             println!("Rows: {}", string);
+    //         }
+    //     }
+    // }
 
     #[test]
     fn load_elements() {
