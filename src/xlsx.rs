@@ -1,7 +1,11 @@
 use calamine::{open_workbook, DataType, Reader, Rows, Xlsx};
 use chrono::Utc;
 use log::warn;
-use std::path::Path;
+use std::{
+    fs::File,
+    io::{Read, Seek},
+    path::Path,
+};
 use thiserror::Error;
 
 use super::models::{Category, Item, WeeklyBasketOffer};
@@ -15,7 +19,7 @@ const COLUMNS_ORDER: &'static [&'static str] =
 
 #[derive(Error, Debug)]
 pub enum ImportError {
-    #[error("opeming error")]
+    #[error("opening error")]
     OpeningError(#[from] calamine::XlsxError),
     #[error("unrecognized file element")]
     InvalidFileType,
@@ -88,8 +92,8 @@ fn read_item_row(cells: &[DataType]) -> Result<Option<Item>, ImportError> {
 }
 
 /// Import and decode on xslx file provided by the farm
-pub fn import_xlsx<P: AsRef<Path>>(path: P) -> Result<WeeklyBasketOffer, ImportError> {
-    let mut workbook: Xlsx<_> = open_workbook(path)?;
+pub fn import_xlsx<R: Read + Seek>(reader: R) -> Result<WeeklyBasketOffer, ImportError> {
+    let mut workbook = Xlsx::new(reader)?;
     // We validate the known shape of the current formular.
     // For now, we assume one worksheet exists with two elements
 
@@ -181,7 +185,7 @@ fn has_product_columns(rows: &mut Rows<DataType>) -> bool {
 mod tests {
     use super::import_xlsx;
     // use calamine::{open_workbook, DataType, Reader, Xlsx};
-    use std::path::PathBuf;
+    use std::{fs::File, io::BufReader, path::PathBuf};
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
     }
@@ -221,7 +225,9 @@ mod tests {
         d.push("assets/test.xlsx");
         println!("Opening: {}", d.display());
 
-        let week_offer = import_xlsx(d).expect("Should parse correctly");
+        let file = File::open(d).unwrap();
+        let mut reader = BufReader::new(file);
+        let week_offer = import_xlsx(reader).expect("Should parse correctly");
 
         assert_eq!(10, week_offer.categories().len());
     }

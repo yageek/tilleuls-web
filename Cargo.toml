@@ -13,3 +13,9 @@ log = "0.4"
 env_logger = "0.7"
 
 chrono = "0.4.11"
+
+reqwest = "0.10.4"
+select = "0.4.3"
+
+[dev-dependencies]
+tokio = {version = "0.2.21", features = ["macros"] }
