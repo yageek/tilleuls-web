@@ -222,7 +222,7 @@ mod tests {
         init();
         std::env::set_var("RUST_LOG", "trace");
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        d.push("assets/test.xlsx");
+        d.push("tests_assets/test.xlsx");
         println!("Opening: {}", d.display());
 
         let file = File::open(d).unwrap();

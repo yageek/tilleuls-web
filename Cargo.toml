@@ -17,5 +17,6 @@ chrono = "0.4.11"
 reqwest = "0.10.4"
 select = "0.4.3"
 
-[dev-dependencies]
-tokio = {version = "0.2.21", features = ["macros"] }
+tokio = { version = "0.2", features = ["macros"] }
+warp = "0.2"
+handlebars = "3.0.1"
