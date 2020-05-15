@@ -16,6 +16,7 @@ use handlebars::Handlebars;
 use std::sync::{Arc, Mutex};
 
 use tokio::runtime::Handle;
+use tokio::sync::mpsc;
 #[derive(Debug)]
 struct ContentData {
     offer: Option<WeeklyBasketOffer>,
@@ -41,6 +42,10 @@ async fn main() {
     // Data for offers
     let mut offer_data: ContentData = ContentData::default();
     let mut offer_data = Arc::new(Mutex::new(offer_data));
+
+    // Setup communication
+
+    let (tx, mut rx) = mpsc::channel(5);
 
     let handle = Handle::current();
     handle.spawn(get_xlsx_data(offer_data));
