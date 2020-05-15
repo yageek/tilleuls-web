@@ -14,11 +14,14 @@ pub enum CrawlError {
     ConvertingError(#[from] ImportError),
     #[error("network error")]
     NetworkError(#[from] reqwest::Error),
+    #[error("no link found")]
+    NoDataFound,
 }
 struct CrawlContent {
     response: Response,
     etag: Option<String>,
 }
+
 async fn get_page_content() -> Result<CrawlContent, CrawlError> {
     // We first check if there is new content
     let response = reqwest::get("https://www.fermedestilleuls.alsace/").await?;
@@ -31,12 +34,10 @@ async fn get_page_content() -> Result<CrawlContent, CrawlError> {
     Ok(CrawlContent { response, etag })
 }
 
-pub async fn week_offer(content: Response) -> Result<WeeklyBasketOffer, CrawlError> {
-    let body = content.text().await?;
-
+async fn week_offer_from_response(response: Response) -> Result<WeeklyBasketOffer, CrawlError> {
+    let body = response.bytes().await?;
     let cursor = Cursor::new(body);
     let ok = import_xlsx(cursor)?;
-
     Ok(ok)
 }
 
@@ -50,6 +51,30 @@ fn get_link_from_page(text: &str) -> Option<String> {
         .collect();
 
     candidates.last().map(|x| x.to_string())
+}
+
+pub async fn retrieve_new_xlsx(
+    previous_etag: Option<&str>,
+) -> Result<Option<WeeklyBasketOffer>, CrawlError> {
+    //
+    let content = get_page_content().await?;
+
+    if previous_etag == content.etag.as_deref() {
+        Ok(None)
+    } else {
+        // Retrieve the content of the HTML page
+        let body = content.response.text().await?;
+
+        if let Some(link) = get_link_from_page(&body) {
+            println!("Link: {}", link);
+            let xlsx_response = reqwest::get(&link).await?;
+            let element = week_offer_from_response(xlsx_response).await?;
+
+            Ok(Some(element))
+        } else {
+            Err(CrawlError::NoDataFound)
+        }
+    }
 }
 
 #[cfg(test)]

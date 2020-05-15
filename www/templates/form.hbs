@@ -1,0 +1,55 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>Ferme des tilleuls | Formulaire de commande</title>
+    <meta name="description" content="Formulaire de commande">
+    <meta name="author" content="SitePoint">
+
+    <link rel="stylesheet" href="static/css/milligram.min.css">
+</head>
+
+<body>
+    <section id="order" class="container">
+        <h3 class="title">Bon de commande</h3>
+
+        <p> Ce formulaire est en phase de test pour le moment ! </p>
+
+        <form id="form-order">
+            {{!-- Nom --}}
+            <fieldset>
+                <legend>Coordonnées</legend>
+                <label for="namefield">Nom</label>
+                <input type="text" placeholder="Nom" id="namefield">
+                {{!-- Prénom --}}
+
+                <label for="firstNamefield">Prénom</label>
+                <input type="text" placeholder="Prénom" id="firstNamefield">
+
+                {{!-- Adress --}}
+                <label for="adressField">Adresse</label>
+                <textarea type="" placeholder="Adresse" id="adressField"></textarea>
+
+                <label for="phoneField">Téléphone</label>
+                <input type="text" placeholder="Téléphone" id="phoneField">
+
+
+            </fieldset>
+
+            {{!-- The content of the form --}}
+            <fieldset>
+                <legend>Contenu</legend>
+
+            </fieldset>
+
+            <input class="button-primary" id="order-submit" type="submit" value="Envoyer">
+        </form>
+    </section>
+
+    <script src="static/js/form_validation.js"></script>
+</body>
+
+</html>
