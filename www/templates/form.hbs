@@ -18,46 +18,45 @@
 
         <p> Ce formulaire est en phase de test pour le moment ! </p>
 
-        <form id="form-order">
+        <form id="form-order" action="order" method="POST">
 
-             {{!-- The content of the form --}}
+            {{!-- The content of the form --}}
             <fieldset>
                 <legend>Contenu</legend>
 
-            {{#each categories}}
+                {{#each categories}}
                 <h2>{{title}}</h2>
 
                 {{#each items}}
-                     <label for="{{@../index}}_{{@index}}">{{title}} ({{unit}})</label>
-                     <input type="number" placeholder="0" id="{{@../index}}_{{@index}}">
+                <label for="item_{{@../index}}_{{@index}}">{{title}} ({{unit}})</label>
+                <input type="number" placeholder="0" id="item_{{@../index}}_{{@index}}"
+                    name="item_{{@../index}}_{{@index}}" value="0">
                 {{/each}}
-            {{/each}}
+                {{/each}}
             </fieldset>
 
             {{!-- Nom --}}
             <fieldset>
                 <legend>Coordonnées</legend>
-                <label for="namefield">Nom</label>
-                <input type="text" placeholder="Nom" id="namefield">
+                <label for="nameField">Nom</label>
+                <input type="text" placeholder="Nom" id="nameField" name="firstName">
                 {{!-- Prénom --}}
 
                 <label for="firstNamefield">Prénom</label>
-                <input type="text" placeholder="Prénom" id="firstNamefield">
+                <input type="text" placeholder="Prénom" id="firstNamefield" name="lastName">
 
                 {{!-- Adress --}}
                 <label for="adressField">Adresse</label>
-                <textarea type="" placeholder="Adresse" id="adressField"></textarea>
+                <textarea type="" placeholder="Adresse" id="adressField" name="address"></textarea>
 
                 <label for="phoneField">Téléphone</label>
-                <input type="text" placeholder="Téléphone" id="phoneField">
-
+                <input type="text" placeholder="Téléphone" id="phoneField" type="tel" name="phone">
 
             </fieldset>
-            <input class="button-primary" id="order-submit" type="submit" value="Envoyer">
+            {{!-- <input class="button-primary" id="order-submit" type="submit" value="Envoyer"> --}}
+            <button>Send my greetings</button>
         </form>
     </section>
-
-    <script src="static/js/form_validation.js"></script>
 </body>
 
 </html>

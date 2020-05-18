@@ -9,17 +9,22 @@ use log::info;
 use std::convert::Infallible;
 use warp::Filter;
 
-use models::WeeklyBasketOffer;
-
+use crate::models::Item;
 use crawl_page::*;
 use handlebars::Handlebars;
+use models::WeeklyBasketOffer;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-
 use tokio::runtime::Handle;
 
 #[derive(Debug)]
 struct ContentData {
     offer: Option<WeeklyBasketOffer>,
+}
+#[derive(Debug)]
+struct Order<'a> {
+    item: &'a Item,
+    quantity: u32,
 }
 
 impl Default for ContentData {
@@ -35,9 +40,9 @@ async fn main() {
     reg.register_template_file("index", "www/templates/index.hbs")
         .unwrap();
 
-        reg.register_template_file("form", "www/templates/form.hbs")
+    reg.register_template_file("form", "www/templates/form.hbs")
         .unwrap();
-    
+
     let reg = Arc::new(reg);
 
     // Register static files
@@ -53,40 +58,72 @@ async fn main() {
     handle.spawn(get_xlsx_data(Arc::clone(&offer_data)));
 
     // Get /
-    let data_clone =  Arc::clone(&offer_data);
-    
-    let index = warp::path::end().map(move || {
+    let data_clone = Arc::clone(&offer_data);
 
+    let index = warp::path::end().map(move || {
         // Check the validaty of the template
         if let Ok(element) = data_clone.lock() {
-                
             if let Some(data) = &element.offer {
                 let content = reg
-                .render("form", &data)
-                .unwrap_or_else(|err| err.to_string());
+                    .render("form", &data)
+                    .unwrap_or_else(|err| err.to_string());
                 warp::reply::html(content)
-            }  else {
+            } else {
                 let content = reg
-                .render("index", &())
-                .unwrap_or_else(|err| err.to_string());
-    
+                    .render("index", &())
+                    .unwrap_or_else(|err| err.to_string());
+
                 warp::reply::html(content)
             }
-        
-            
         } else {
             let content = reg
-            .render("index", &())
-            .unwrap_or_else(|err| err.to_string());
+                .render("index", &())
+                .unwrap_or_else(|err| err.to_string());
 
             warp::reply::html(content)
         }
-
-      
     });
 
+    // Get /
+    let new_clone = Arc::clone(&offer_data);
+    // Order preview
+    let order_preview = warp::path("order")
+        .and(warp::post())
+        .and(warp::body::content_length_limit(1024 * 32))
+        .and(warp::body::form())
+        .map(move |form: HashMap<String, String>| {
+            if let Ok(element) = new_clone.lock() {
+                if let Some(offer) = &element.offer {
+                    // Retrieve all_elements
+                    let items: Vec<&Item> = form
+                        .keys()
+                        .filter_map(|key| {
+                            if key.starts_with("item_") {
+                                let indexes: Vec<u32> = key
+                                    .split("_")
+                                    .skip(1)
+                                    .map(|s| s.parse::<u32>().unwrap())
+                                    .collect();
+
+                                Some(
+                                    &offer.categories()[indexes[0] as usize].items()
+                                        [indexes[1] as usize],
+                                )
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    return format!("Items: {:?}", items);
+                }
+            }
+
+            return "Hello".to_string();
+        });
+
     // Global routes
-    let routes = warp::get().and(fs.or(index));
+    let routes = warp::get().and(fs.or(index)).or(order_preview);
 
     // Hot reload
 
