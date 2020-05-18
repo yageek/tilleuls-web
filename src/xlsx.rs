@@ -148,7 +148,7 @@ pub fn import_xlsx<R: Read + Seek>(reader: R) -> Result<WeeklyBasketOffer, Impor
         }
     }
 
-    Ok(WeeklyBasketOffer::new(Utc::today(), categories))
+    Ok(WeeklyBasketOffer::new(categories))
 }
 
 fn has_header(rows: &mut Rows<DataType>) -> bool {

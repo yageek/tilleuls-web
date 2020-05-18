@@ -19,6 +19,21 @@
         <p> Ce formulaire est en phase de test pour le moment ! </p>
 
         <form id="form-order">
+
+             {{!-- The content of the form --}}
+            <fieldset>
+                <legend>Contenu</legend>
+
+            {{#each categories}}
+                <h2>{{title}}</h2>
+
+                {{#each items}}
+                     <label for="{{@index}}">{{title}} ({{unit}})</label>
+                     <input type="number" placeholder="0" id="{{@index}}">
+                {{/each}}
+            {{/each}}
+            </fieldset>
+
             {{!-- Nom --}}
             <fieldset>
                 <legend>Coordonnées</legend>
@@ -38,13 +53,6 @@
 
 
             </fieldset>
-
-            {{!-- The content of the form --}}
-            <fieldset>
-                <legend>Contenu</legend>
-
-            </fieldset>
-
             <input class="button-primary" id="order-submit" type="submit" value="Envoyer">
         </form>
     </section>

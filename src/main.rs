@@ -16,7 +16,7 @@ use handlebars::Handlebars;
 use std::sync::{Arc, Mutex};
 
 use tokio::runtime::Handle;
-use tokio::sync::mpsc;
+
 #[derive(Debug)]
 struct ContentData {
     offer: Option<WeeklyBasketOffer>,
@@ -32,8 +32,12 @@ impl Default for ContentData {
 async fn main() {
     // Load the templates
     let mut reg = Handlebars::new();
-    reg.register_template_file("index", "www/templates/form.hbs")
+    reg.register_template_file("index", "www/templates/index.hbs")
         .unwrap();
+
+        reg.register_template_file("form", "www/templates/form.hbs")
+        .unwrap();
+    
     let reg = Arc::new(reg);
 
     // Register static files
@@ -45,18 +49,40 @@ async fn main() {
 
     // Setup communication
 
-    let (tx, mut rx) = mpsc::channel(5);
-
     let handle = Handle::current();
-    handle.spawn(get_xlsx_data(offer_data));
+    handle.spawn(get_xlsx_data(Arc::clone(&offer_data)));
 
     // Get /
+    let data_clone =  Arc::clone(&offer_data);
+    
     let index = warp::path::end().map(move || {
-        let content = reg
+
+        // Check the validaty of the template
+        if let Ok(element) = data_clone.lock() {
+                
+            if let Some(data) = &element.offer {
+                let content = reg
+                .render("form", &data)
+                .unwrap_or_else(|err| err.to_string());
+                warp::reply::html(content)
+            }  else {
+                let content = reg
+                .render("index", &())
+                .unwrap_or_else(|err| err.to_string());
+    
+                warp::reply::html(content)
+            }
+        
+            
+        } else {
+            let content = reg
             .render("index", &())
             .unwrap_or_else(|err| err.to_string());
 
-        warp::reply::html(content)
+            warp::reply::html(content)
+        }
+
+      
     });
 
     // Global routes

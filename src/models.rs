@@ -1,6 +1,7 @@
 use chrono::{Date, Utc};
+use serde::{Serialize};
 
-#[derive(Debug)]
+#[derive(Serialize, Debug)]
 pub struct Item {
     title: String,
     unit: String,
@@ -17,7 +18,7 @@ impl Item {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Debug)]
 pub struct Category {
     title: String,
     items: Vec<Item>,
@@ -40,16 +41,15 @@ impl Category {
         &self.items
     }
 }
-#[derive(Debug)]
+#[derive(Serialize, Debug)]
 pub struct WeeklyBasketOffer {
     #[allow(dead_code)]
-    date: Date<Utc>,
     categories: Vec<Category>,
 }
 
 impl WeeklyBasketOffer {
-    pub fn new(date: Date<Utc>, categories: Vec<Category>) -> WeeklyBasketOffer {
-        WeeklyBasketOffer { date, categories }
+    pub fn new(categories: Vec<Category>) -> WeeklyBasketOffer {
+        WeeklyBasketOffer { categories }
     }
 
     pub fn categories(&self) -> &[Category] {
@@ -71,7 +71,7 @@ mod tests {
 
         assert_eq!(1, fruits.items.len());
 
-        let offer = WeeklyBasketOffer::new(Utc::today(), vec![fruits]);
+        let offer = WeeklyBasketOffer::new(vec![fruits]);
         assert_eq!(1, offer.categories.len());
     }
 }
