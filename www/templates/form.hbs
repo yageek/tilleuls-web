@@ -28,8 +28,8 @@
                 <h2>{{title}}</h2>
 
                 {{#each items}}
-                     <label for="{{@index}}">{{title}} ({{unit}})</label>
-                     <input type="number" placeholder="0" id="{{@index}}">
+                     <label for="{{@../index}}_{{@index}}">{{title}} ({{unit}})</label>
+                     <input type="number" placeholder="0" id="{{@../index}}_{{@index}}">
                 {{/each}}
             {{/each}}
             </fieldset>
