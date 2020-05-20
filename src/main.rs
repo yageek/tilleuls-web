@@ -7,7 +7,7 @@ use hyper::server::Server;
 use listenfd::ListenFd;
 use log::info;
 use std::convert::Infallible;
-use warp::Filter;
+use warp::{reject::Reject, Filter};
 
 use crate::models::Item;
 use crawl_page::*;
@@ -29,38 +29,54 @@ struct Order<'a> {
     quantity: u32,
 }
 
-struct WithTemplate<T> {
-    template: &'static str,
-    value: T,
+#[derive(Debug)]
+enum DataError {
+    NotFound,
 }
 
-fn render<T>(template: WithTemplate<T>, hbs: Arc<Handlebars>) -> impl warp::Reply
-where
-    T: Serialize,
-{
-    let value = hbs
-        .render(template.template, &template.value)
-        .unwrap_or_else(|e| e.to_string());
-    warp::reply::html(value)
+impl Reject for DataError {}
+
+struct Render<'a> {
+    hbs: Handlebars<'a>,
+}
+
+impl<'a> Default for Render<'a> {
+    fn default() -> Self {
+        let mut hbs = Handlebars::new();
+        hbs.register_template_file("index", "www/templates/index.hbs")
+            .unwrap();
+
+        hbs.register_template_file("form", "www/templates/form.hbs")
+            .unwrap();
+        Render { hbs }
+    }
+}
+
+impl<'a> Render<'a> {
+    fn new() -> Self {
+        Render::default()
+    }
+
+    fn render<T: Serialize>(&self, template: &str, value: &T) -> impl warp::Reply {
+        let value = self
+            .hbs
+            .render(template, value)
+            .unwrap_or_else(|e| e.to_string());
+        warp::reply::html(value)
+    }
 }
 
 #[tokio::main]
 async fn main() {
     // Load the templates
-    let mut hbs = Handlebars::new();
-    hbs.register_template_file("index", "www/templates/index.hbs")
-        .unwrap();
 
-    hbs.register_template_file("form", "www/templates/form.hbs")
-        .unwrap();
-
-    let hbs = Arc::new(hbs);
-
-    let handlebars = move |t| render(t, hbs.clone());
+    let hbs = Arc::new(Render::default());
 
     // Data for offers
-    let mut app_data: AppData = AppData { offer: None };
-    let mut app_data_arc = Arc::new(Mutex::new(app_data));
+    let app_data: AppData = AppData { offer: None };
+    let app_data_arc = Arc::new(Mutex::new(app_data));
+    let with_app_data = warp::any().map(move || app_data_arc.clone());
+    let with_render = warp::any().map(move || hbs.clone());
 
     // Register static files
     let fs = warp::path("static").and(warp::fs::dir("www/static"));
@@ -70,20 +86,10 @@ async fn main() {
     handle.spawn(get_xlsx_data(app_data_arc.clone()));
 
     // Get /
-    let form_clone = app_data_arc.clone();
-
     let index = warp::path::end()
-        .map(move || match form_clone.lock() {
-            Ok(guard) => WithTemplate {
-                template: "index",
-                value: (),
-            },
-            _ => WithTemplate {
-                template: "index",
-                value: (),
-            },
-        })
-        .map(handlebars);
+        .and(with_render)
+        .and(with_app_data)
+        .map(|r: Arc<Render>, data: Arc<Mutex<AppData>>| r.render::<()>("index", &()));
 
     // Get /
     // let new_clone = Arc::clone(&app_data_arc);
