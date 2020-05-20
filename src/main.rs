@@ -7,7 +7,7 @@ use hyper::server::Server;
 use listenfd::ListenFd;
 use log::info;
 use std::convert::Infallible;
-use warp::{reject::Reject, Filter};
+use warp::{http::Response, reject::Reject, Filter};
 
 use crate::models::Item;
 use crawl_page::*;
@@ -57,12 +57,21 @@ impl<'a> Render<'a> {
         Render::default()
     }
 
-    fn render<T: Serialize>(&self, template: &str, value: &T) -> impl warp::Reply {
-        let value = self
-            .hbs
-            .render(template, value)
-            .unwrap_or_else(|e| e.to_string());
-        warp::reply::html(value)
+    fn render<T: Serialize>(&self, template: &str, value: Option<&T>) -> impl warp::Reply {
+        let output: String;
+        if let Some(content) = value {
+            output = self
+                .hbs
+                .render(template, content)
+                .unwrap_or_else(|e| e.to_string());
+        } else {
+            output = self
+                .hbs
+                .render(template, &())
+                .unwrap_or_else(|e| e.to_string());
+        }
+
+        warp::reply::html(output)
     }
 }
 
@@ -87,10 +96,17 @@ async fn main() {
     handle.spawn(get_xlsx_data(app_data.clone()));
 
     // Get /
-    let index = warp::path::end()
-        .and(with_render)
-        .and(with_app_data)
-        .map(|r: Arc<Render>, data: Arc<Mutex<AppData>>| r.render::<()>("index", &()));
+    let index = warp::path::end().and(with_render).and(with_app_data).map(
+        |r: Arc<Render>, data: Arc<Mutex<AppData>>| {
+            let data = data.lock().unwrap();
+
+            if let Some(offer) = &data.offer {
+                r.render("form", Some(offer))
+            } else {
+                r.render("index", None)
+            }
+        },
+    );
 
     // Get /
     // let new_clone = Arc::clone(&app_data_arc);
