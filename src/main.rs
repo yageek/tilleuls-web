@@ -13,117 +13,119 @@ use crate::models::Item;
 use crawl_page::*;
 use handlebars::Handlebars;
 use models::WeeklyBasketOffer;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Handle;
 
 #[derive(Debug)]
-struct ContentData {
+struct AppData {
     offer: Option<WeeklyBasketOffer>,
 }
+
 #[derive(Debug)]
 struct Order<'a> {
     item: &'a Item,
     quantity: u32,
 }
 
-impl Default for ContentData {
-    fn default() -> Self {
-        ContentData { offer: None }
-    }
+struct WithTemplate<T> {
+    template: &'static str,
+    value: T,
+}
+
+fn render<T>(template: WithTemplate<T>, hbs: Arc<Handlebars>) -> impl warp::Reply
+where
+    T: Serialize,
+{
+    let value = hbs
+        .render(template.template, &template.value)
+        .unwrap_or_else(|e| e.to_string());
+    warp::reply::html(value)
 }
 
 #[tokio::main]
 async fn main() {
     // Load the templates
-    let mut reg = Handlebars::new();
-    reg.register_template_file("index", "www/templates/index.hbs")
+    let mut hbs = Handlebars::new();
+    hbs.register_template_file("index", "www/templates/index.hbs")
         .unwrap();
 
-    reg.register_template_file("form", "www/templates/form.hbs")
+    hbs.register_template_file("form", "www/templates/form.hbs")
         .unwrap();
 
-    let reg = Arc::new(reg);
+    let hbs = Arc::new(hbs);
+
+    let handlebars = move |t| render(t, hbs.clone());
+
+    // Data for offers
+    let mut app_data: AppData = AppData { offer: None };
+    let mut app_data_arc = Arc::new(Mutex::new(app_data));
 
     // Register static files
     let fs = warp::path("static").and(warp::fs::dir("www/static"));
 
-    // Data for offers
-    let mut offer_data: ContentData = ContentData::default();
-    let mut offer_data = Arc::new(Mutex::new(offer_data));
-
     // Setup communication
-
     let handle = Handle::current();
-    handle.spawn(get_xlsx_data(Arc::clone(&offer_data)));
+    handle.spawn(get_xlsx_data(app_data_arc.clone()));
 
     // Get /
-    let data_clone = Arc::clone(&offer_data);
+    let form_clone = app_data_arc.clone();
 
-    let index = warp::path::end().map(move || {
-        // Check the validaty of the template
-        if let Ok(element) = data_clone.lock() {
-            if let Some(data) = &element.offer {
-                let content = reg
-                    .render("form", &data)
-                    .unwrap_or_else(|err| err.to_string());
-                warp::reply::html(content)
-            } else {
-                let content = reg
-                    .render("index", &())
-                    .unwrap_or_else(|err| err.to_string());
-
-                warp::reply::html(content)
-            }
-        } else {
-            let content = reg
-                .render("index", &())
-                .unwrap_or_else(|err| err.to_string());
-
-            warp::reply::html(content)
-        }
-    });
+    let index = warp::path::end()
+        .map(move || match form_clone.lock() {
+            Ok(guard) => WithTemplate {
+                template: "index",
+                value: (),
+            },
+            _ => WithTemplate {
+                template: "index",
+                value: (),
+            },
+        })
+        .map(handlebars);
 
     // Get /
-    let new_clone = Arc::clone(&offer_data);
-    // Order preview
-    let order_preview = warp::path("order")
-        .and(warp::post())
-        .and(warp::body::content_length_limit(1024 * 32))
-        .and(warp::body::form())
-        .map(move |form: HashMap<String, String>| {
-            if let Ok(element) = new_clone.lock() {
-                if let Some(offer) = &element.offer {
-                    // Retrieve all_elements
-                    let items: Vec<&Item> = form
-                        .keys()
-                        .filter_map(|key| {
-                            if key.starts_with("item_") {
-                                let indexes: Vec<u32> = key
-                                    .split("_")
-                                    .skip(1)
-                                    .map(|s| s.parse::<u32>().unwrap())
-                                    .collect();
+    // let new_clone = Arc::clone(&app_data_arc);
+    // // Order preview
+    // let order_preview = warp::path("order")
+    //     .and(warp::post())
+    //     .and(warp::body::content_length_limit(1024 * 32))
+    //     .and(warp::body::form())
+    //     .map(move |form: HashMap<String, String>| {
+    //         if let Ok(element) = new_clone.lock() {
+    //             if let Some(offer) = &element.offer {
+    //                 // Retrieve all_elements
+    //                 let items: Vec<&Item> = form
+    //                     .keys()
+    //                     .filter_map(|key| {
+    //                         // Items
+    //                         if key.starts_with("item_") {
+    //                             let indexes: Vec<u32> = key
+    //                                 .split("_")
+    //                                 .skip(1)
+    //                                 .map(|s| s.parse::<u32>().unwrap())
+    //                                 .collect();
 
-                                Some(
-                                    &offer.categories()[indexes[0] as usize].items()
-                                        [indexes[1] as usize],
-                                )
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
+    //                             Some(
+    //                                 &offer.categories()[indexes[0] as usize].items()
+    //                                     [indexes[1] as usize],
+    //                             )
+    //                         } else {
+    //                             None
+    //                         }
+    //                     })
+    //                     .collect();
 
-                    return format!("Items: {:?}", items);
-                }
-            }
+    //                 return format!("Items: {:?}", items);
+    //             }
+    //         }
 
-            return "Hello".to_string();
-        });
+    //         return "Hello".to_string();
+    //     });
 
     // Global routes
-    let routes = warp::get().and(fs.or(index)).or(order_preview);
+    let routes = warp::get().and(fs.or(index));
 
     // Hot reload
 
@@ -154,7 +156,7 @@ async fn main() {
     server.serve(make_svc).await.unwrap();
 }
 
-async fn get_xlsx_data(data: Arc<Mutex<ContentData>>) {
+async fn get_xlsx_data<'a>(data: Arc<Mutex<AppData>>) {
     info!("Start retrieving xlsx from the server...");
 
     if let Ok(Some(offer)) = retrieve_new_xlsx(None).await {
