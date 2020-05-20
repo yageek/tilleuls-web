@@ -73,8 +73,9 @@ async fn main() {
     let hbs = Arc::new(Render::default());
 
     // Data for offers
-    let app_data: AppData = AppData { offer: None };
-    let app_data_arc = Arc::new(Mutex::new(app_data));
+    let app_data = Arc::new(Mutex::new(AppData { offer: None }));
+    let app_data_arc = app_data.clone();
+
     let with_app_data = warp::any().map(move || app_data_arc.clone());
     let with_render = warp::any().map(move || hbs.clone());
 
@@ -83,7 +84,7 @@ async fn main() {
 
     // Setup communication
     let handle = Handle::current();
-    handle.spawn(get_xlsx_data(app_data_arc.clone()));
+    handle.spawn(get_xlsx_data(app_data.clone()));
 
     // Get /
     let index = warp::path::end()
