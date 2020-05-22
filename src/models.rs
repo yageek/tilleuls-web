@@ -1,7 +1,7 @@
 use chrono::{Date, Utc};
-use serde::{Serialize};
+use serde::Serialize;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Item {
     title: String,
     unit: String,
@@ -15,6 +15,10 @@ impl Item {
             unit: unit.into(),
             price,
         }
+    }
+
+    pub fn price(&self) -> f64 {
+        self.price
     }
 }
 

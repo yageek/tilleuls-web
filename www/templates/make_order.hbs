@@ -28,7 +28,7 @@
                 <h2>{{title}}</h2>
 
                 {{#each items}}
-                <label for="item_{{@../index}}_{{@index}}">{{title}} ({{unit}})</label>
+                <label for="item_{{@../index}}_{{@index}}">{{title}} ({{unit}}) | Prix: <b>{{price}} €</b></label>
                 <input type="number" placeholder="0" id="item_{{@../index}}_{{@index}}"
                     name="item_{{@../index}}_{{@index}}" value="0">
                 {{/each}}

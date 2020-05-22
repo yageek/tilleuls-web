@@ -13,20 +13,68 @@ use crate::models::Item;
 use crawl_page::*;
 use handlebars::Handlebars;
 use models::WeeklyBasketOffer;
+
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Handle;
 
+use num::bigint::BigInt;
+use num::rational::{BigRational, Ratio};
+use num::FromPrimitive;
+use num_traits::cast::ToPrimitive;
+use num_traits::identities::{One, Zero};
 #[derive(Debug)]
 struct AppData {
     offer: Option<WeeklyBasketOffer>,
 }
 
-#[derive(Debug)]
-struct Order<'a> {
-    item: &'a Item,
+#[derive(Debug, Serialize)]
+struct OrderItem<'a> {
+    ref_item: &'a Item,
     quantity: u32,
+    sub_price: f64,
+}
+
+impl<'a> OrderItem<'a> {
+    fn new(item: &'a Item, quantity: u32) -> OrderItem<'a> {
+        let price =
+            BigRational::from_f64(item.price()).unwrap() * BigRational::from_u32(quantity).unwrap();
+
+        let float_result = price.numer().to_f64().unwrap() / price.denom().to_f64().unwrap();
+
+        OrderItem {
+            ref_item: item,
+            quantity,
+            sub_price: float_result,
+        }
+    }
+}
+#[derive(Debug, Serialize)]
+struct OrderPreview<'a> {
+    order_items: Vec<OrderItem<'a>>,
+    total: f64,
+}
+
+impl<'a> OrderPreview<'a> {
+    fn new(items: Vec<OrderItem<'a>>) -> OrderPreview<'a> {
+        let total = items
+            .iter()
+            .map({
+                |item| {
+                    Ratio::from_f64(item.ref_item.price()).unwrap()
+                        * Ratio::from_u32(item.quantity).unwrap()
+                }
+            })
+            .fold(BigRational::zero(), |acc, x| acc + x);
+
+        let float_result = total.numer().to_f64().unwrap() / total.denom().to_f64().unwrap();
+
+        OrderPreview {
+            order_items: items,
+            total: float_result,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -46,109 +94,119 @@ impl<'a> Default for Render<'a> {
         hbs.register_template_file("index", "www/templates/index.hbs")
             .unwrap();
 
-        hbs.register_template_file("form", "www/templates/form.hbs")
+        hbs.register_template_file("make_order", "www/templates/make_order.hbs")
+            .unwrap();
+
+        hbs.register_template_file("order_preview", "www/templates/order_preview.hbs")
             .unwrap();
         Render { hbs }
     }
 }
 
 impl<'a> Render<'a> {
-    fn new() -> Self {
-        Render::default()
+    fn render<T: Serialize>(&self, template: &str, value: Option<&T>) -> String {
+        if let Some(content) = value {
+            self.hbs
+                .render(template, &content)
+                .unwrap_or_else(|e| e.to_string())
+        } else {
+            self.hbs
+                .render(template, &())
+                .unwrap_or_else(|e| e.to_string())
+        }
     }
 
-    fn render<T: Serialize>(&self, template: &str, value: Option<&T>) -> impl warp::Reply {
-        let output: String;
-        if let Some(content) = value {
-            output = self
-                .hbs
-                .render(template, content)
-                .unwrap_or_else(|e| e.to_string());
-        } else {
-            output = self
-                .hbs
-                .render(template, &())
-                .unwrap_or_else(|e| e.to_string());
-        }
-
+    fn render_html<T: Serialize>(&self, template: &str, value: Option<&T>) -> impl warp::Reply {
+        let output = self.render(template, value);
         warp::reply::html(output)
     }
+}
+
+fn render_order_preview<'a>(
+    app_data: &'a AppData,
+    form: HashMap<String, String>,
+) -> Vec<OrderItem<'a>> {
+    if let Some(offer) = &app_data.offer {
+        // Retrieve all_elements
+        let orders: Vec<OrderItem<'_>> = form
+            .iter()
+            .filter_map(|(key, value)| {
+                // Items
+
+                if key.starts_with("item_") && value != "0" {
+                    let indexes: Vec<u32> = key
+                        .split("_")
+                        .skip(1)
+                        .map(|s| s.parse::<u32>().unwrap())
+                        .collect();
+
+                    let item =
+                        &offer.categories()[indexes[0] as usize].items()[indexes[1] as usize];
+                    let quantity = value.parse::<u32>().unwrap();
+
+                    Some(OrderItem::new(item, quantity))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        return orders;
+    }
+    return vec![];
 }
 
 #[tokio::main]
 async fn main() {
     // Load the templates
+    let app_data_arc = Arc::new(Mutex::new(AppData { offer: None }));
+    let hbs_arc = Arc::new(Render::default());
 
-    let hbs = Arc::new(Render::default());
+    // Handle retrieval
+    let handle = Handle::current();
+    handle.spawn(get_xlsx_data(app_data_arc.clone()));
 
     // Data for offers
-    let app_data = Arc::new(Mutex::new(AppData { offer: None }));
-    let app_data_arc = app_data.clone();
-
-    let with_app_data = warp::any().map(move || app_data_arc.clone());
-    let with_render = warp::any().map(move || hbs.clone());
 
     // Register static files
     let fs = warp::path("static").and(warp::fs::dir("www/static"));
 
     // Setup communication
-    let handle = Handle::current();
-    handle.spawn(get_xlsx_data(app_data.clone()));
 
     // Get /
-    let index = warp::path::end().and(with_render).and(with_app_data).map(
-        |r: Arc<Render>, data: Arc<Mutex<AppData>>| {
-            let data = data.lock().unwrap();
 
-            if let Some(offer) = &data.offer {
-                r.render("form", Some(offer))
-            } else {
-                r.render("index", None)
-            }
-        },
-    );
+    let app_data = app_data_arc.clone();
+    let hbs = hbs_arc.clone();
+    let index = warp::path::end().map(move || {
+        let data = app_data.lock().unwrap();
+
+        if let Some(offer) = &data.offer {
+            hbs.render_html("make_order", Some(offer))
+        } else {
+            hbs.render_html("index", None)
+        }
+    });
 
     // Get /
-    // let new_clone = Arc::clone(&app_data_arc);
-    // // Order preview
-    // let order_preview = warp::path("order")
-    //     .and(warp::post())
-    //     .and(warp::body::content_length_limit(1024 * 32))
-    //     .and(warp::body::form())
-    //     .map(move |form: HashMap<String, String>| {
-    //         if let Ok(element) = new_clone.lock() {
-    //             if let Some(offer) = &element.offer {
-    //                 // Retrieve all_elements
-    //                 let items: Vec<&Item> = form
-    //                     .keys()
-    //                     .filter_map(|key| {
-    //                         // Items
-    //                         if key.starts_with("item_") {
-    //                             let indexes: Vec<u32> = key
-    //                                 .split("_")
-    //                                 .skip(1)
-    //                                 .map(|s| s.parse::<u32>().unwrap())
-    //                                 .collect();
+    let app_data = app_data_arc.clone();
+    let hbs = hbs_arc.clone();
 
-    //                             Some(
-    //                                 &offer.categories()[indexes[0] as usize].items()
-    //                                     [indexes[1] as usize],
-    //                             )
-    //                         } else {
-    //                             None
-    //                         }
-    //                     })
-    //                     .collect();
+    // Order preview
+    let make_order = warp::path("order")
+        .and(warp::post())
+        .and(warp::body::content_length_limit(1024 * 32))
+        .and(warp::body::form())
+        .map(move |form: HashMap<String, String>| {
+            let app_data = app_data.lock().unwrap();
+            let items = render_order_preview(&app_data, form);
 
-    //                 return format!("Items: {:?}", items);
-    //             }
-    //         }
+            let order_preview = OrderPreview::new(items);
 
-    //         return "Hello".to_string();
-    //     });
+            let string = hbs.render("order_preview", Some(&order_preview));
+            warp::reply::html(string)
+        });
 
     // Global routes
-    let routes = warp::get().and(fs.or(index));
+    let routes = warp::get().and(fs.or(index)).or(make_order);
 
     // Hot reload
 

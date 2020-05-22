@@ -26,3 +26,6 @@ serde_urlencoded = "0.5.1"
 
 listenfd = "0.3"
 hyper = { version = "0.13", features = ["stream"] }
+
+num = "0.2.1"
+num-traits = "0.2"

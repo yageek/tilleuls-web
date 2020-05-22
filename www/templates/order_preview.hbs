@@ -1,0 +1,55 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>Ferme des tilleuls | Formulaire de commande</title>
+    <meta name="description" content="Formulaire de commande">
+    <meta name="author" content="SitePoint">
+
+    <link rel="stylesheet" href="static/css/milligram.min.css">
+</head>
+
+<body>
+    <section id="order" class="container">
+        <h3 class="title">Bon de commande</h3>
+
+        <p> Ce formulaire est en phase de test pour le moment ! </p>
+
+        <p> Votre récapitulatif de commande : </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Article</th>
+                    <th>Quantité</th>
+                    <th>Prix unitaire</th>
+                    <th>Sous total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each order_items}}
+                <tr>
+                    <td>{{ref_item.title}} ({{ref_item.unit}})</td>
+                    <td>{{quantity}}</td>
+                    <td>{{ref_item.price}}</td>
+                    <td>{{sub_price}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td><b>Total</b></td>
+                    <td colspan="3"><b>{{total}} € </b></td>
+                </tr>
+            </tfoot>
+        </table>
+        </ul>
+
+
+    </section>
+</body>
+
+</html>
