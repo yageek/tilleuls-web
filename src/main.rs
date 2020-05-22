@@ -7,9 +7,9 @@ use hyper::server::Server;
 use listenfd::ListenFd;
 use log::info;
 use std::convert::Infallible;
-use warp::{http::Response, reject::Reject, Filter};
+use warp::{reject::Reject, Filter};
 
-use crate::models::Item;
+use crate::models::*;
 use crawl_page::*;
 use handlebars::Handlebars;
 use models::WeeklyBasketOffer;
@@ -19,62 +19,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Handle;
 
-use num::bigint::BigInt;
-use num::rational::{BigRational, Ratio};
-use num::FromPrimitive;
-use num_traits::cast::ToPrimitive;
-use num_traits::identities::{One, Zero};
 #[derive(Debug)]
 struct AppData {
     offer: Option<WeeklyBasketOffer>,
-}
-
-#[derive(Debug, Serialize)]
-struct OrderItem<'a> {
-    ref_item: &'a Item,
-    quantity: u32,
-    sub_price: f64,
-}
-
-impl<'a> OrderItem<'a> {
-    fn new(item: &'a Item, quantity: u32) -> OrderItem<'a> {
-        let price =
-            BigRational::from_f64(item.price()).unwrap() * BigRational::from_u32(quantity).unwrap();
-
-        let float_result = price.numer().to_f64().unwrap() / price.denom().to_f64().unwrap();
-
-        OrderItem {
-            ref_item: item,
-            quantity,
-            sub_price: float_result,
-        }
-    }
-}
-#[derive(Debug, Serialize)]
-struct OrderPreview<'a> {
-    order_items: Vec<OrderItem<'a>>,
-    total: f64,
-}
-
-impl<'a> OrderPreview<'a> {
-    fn new(items: Vec<OrderItem<'a>>) -> OrderPreview<'a> {
-        let total = items
-            .iter()
-            .map({
-                |item| {
-                    Ratio::from_f64(item.ref_item.price()).unwrap()
-                        * Ratio::from_u32(item.quantity).unwrap()
-                }
-            })
-            .fold(BigRational::zero(), |acc, x| acc + x);
-
-        let float_result = total.numer().to_f64().unwrap() / total.denom().to_f64().unwrap();
-
-        OrderPreview {
-            order_items: items,
-            total: float_result,
-        }
-    }
 }
 
 #[derive(Debug)]

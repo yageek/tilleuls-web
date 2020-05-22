@@ -1,6 +1,10 @@
-use chrono::{Date, Utc};
 use serde::Serialize;
 
+use num::bigint::BigInt;
+use num::rational::{BigRational, Ratio};
+use num::FromPrimitive;
+use num_traits::cast::ToPrimitive;
+use num_traits::identities::{One, Zero};
 #[derive(Serialize, Debug, Clone)]
 pub struct Item {
     title: String,
@@ -58,6 +62,54 @@ impl WeeklyBasketOffer {
 
     pub fn categories(&self) -> &[Category] {
         &self.categories
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrderItem<'a> {
+    ref_item: &'a Item,
+    quantity: u32,
+    sub_price: f64,
+}
+
+impl<'a> OrderItem<'a> {
+    pub fn new(item: &'a Item, quantity: u32) -> OrderItem<'a> {
+        let price =
+            BigRational::from_f64(item.price()).unwrap() * BigRational::from_u32(quantity).unwrap();
+
+        let float_result = price.numer().to_f64().unwrap() / price.denom().to_f64().unwrap();
+
+        OrderItem {
+            ref_item: item,
+            quantity,
+            sub_price: float_result,
+        }
+    }
+}
+#[derive(Debug, Serialize)]
+pub struct OrderPreview<'a> {
+    order_items: Vec<OrderItem<'a>>,
+    total: f64,
+}
+
+impl<'a> OrderPreview<'a> {
+    pub fn new(items: Vec<OrderItem<'a>>) -> OrderPreview<'a> {
+        let total = items
+            .iter()
+            .map({
+                |item| {
+                    Ratio::from_f64(item.ref_item.price()).unwrap()
+                        * Ratio::from_u32(item.quantity).unwrap()
+                }
+            })
+            .fold(BigRational::zero(), |acc, x| acc + x);
+
+        let float_result = total.numer().to_f64().unwrap() / total.denom().to_f64().unwrap();
+
+        OrderPreview {
+            order_items: items,
+            total: float_result,
+        }
     }
 }
 
