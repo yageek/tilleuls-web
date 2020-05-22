@@ -48,6 +48,30 @@
         </table>
         </ul>
 
+        <form action="/confirm_order" method="POST">
+            {{!-- Nom --}}
+            <fieldset>
+                <legend>Coordonnées</legend>
+                <label for="nameField">Nom</label>
+                <input type="text" placeholder="Nom" id="nameField" name="firstName" autocomplete="family-name">
+                {{!-- Prénom --}}
+
+                <label for="firstNamefield">Prénom</label>
+                <input type="text" placeholder="Prénom" id="firstNamefield" name="lastName" autocomplete="given-name">
+
+                {{!-- Adress --}}
+                <label for="adressField">Adresse</label>
+                <textarea type="" placeholder="Adresse" id="adressField" name="address"
+                    autocomplete="street-address"></textarea>
+
+                <label for="phoneField">Téléphone</label>
+                <input type="text" placeholder="Téléphone" id="phoneField" type="tel" name="phone" autocomplete="tel">
+
+            </fieldset>
+
+            <button>Envoyer</button>
+        </form>
+
 
     </section>
 </body>

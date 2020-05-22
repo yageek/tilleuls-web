@@ -132,7 +132,6 @@ fn render_order_preview<'a>(
             .iter()
             .filter_map(|(key, value)| {
                 // Items
-
                 if key.starts_with("item_") && value != "0" {
                     let indexes: Vec<u32> = key
                         .split("_")
