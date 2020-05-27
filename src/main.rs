@@ -112,6 +112,8 @@ async fn main() {
 
     // Templates
     let hbs_arc = Arc::new(Render::default());
+    let hbs_filter = warp::any().map(move || hbs_arc.clone());
+    let hbs = move || hbs_filter.clone();
 
     // XLSX retrieval
     let handle = Handle::current();
@@ -125,8 +127,7 @@ async fn main() {
 
     // Load the session
     let app_data = app_data_arc.clone();
-    let hbs = hbs_arc.clone();
-    let index = warp::path::end().map(move || {
+    let index = warp::path::end().and(hbs()).map(move |hbs: Arc<Render>| {
         let data = app_data.read().unwrap();
 
         if let Some(offer) = &data.offer {
@@ -138,14 +139,14 @@ async fn main() {
 
     // Get /
     let app_data = app_data_arc.clone();
-    let hbs = hbs_arc.clone();
+    // let hbs = hbs_arc.clone();
 
-    // Order preview
     let make_order = warp::path("order")
         .and(warp::post())
         .and(warp::body::content_length_limit(1024 * 32))
         .and(warp::body::form())
-        .map(move |form: HashMap<String, String>| {
+        .and(hbs())
+        .map(move |form: HashMap<String, String>, hbs: Arc<Render>| {
             let app_data_x = app_data.write().unwrap();
 
             let items = render_order_preview(&app_data_x, form);
@@ -158,16 +159,11 @@ async fn main() {
             };
 
             let key = SessionRegistry::random_key(48);
-            let cookie = format!("TILLEULS_AUTH={}; SameSite=Strict; HttpOpnly", key);
-            app_data_x.sessions.insert_session(key, session);
-
-            warp::http::Response::builder()
-                .header(warp::http::header::SET_COOKIE, cookie)
-                .body(cookie)
+            // app_data_x.sessions.insert_session(key, session);
+            hbs.render_html::<()>("index", None)
         });
-
     // Global routes
-    let routes = warp::get().and(fs.or(index)).or(make_order);
+    let routes = warp::get().and(fs.or(index)); //.or(make_order);
 
     // Hot reload
 
@@ -197,6 +193,7 @@ async fn main() {
 
     server.serve(make_svc).await.unwrap();
 }
+
 async fn get_xlsx_data<'a>(data: Arc<RwLock<AppData<'a>>>) {
     info!("Start retrieving xlsx from the server...");
 

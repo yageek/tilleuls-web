@@ -133,7 +133,7 @@ impl<'a> SessionRegistry<'a> {
         }
     }
 
-    pub fn insert_session<'b: 'a>(&mut self, key: String, session: Session<'b>) {
+    pub fn insert_session(&mut self, key: String, session: Session<'a>) {
         self.sessions.insert(key, session);
     }
 
