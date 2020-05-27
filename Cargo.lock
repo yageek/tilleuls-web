@@ -46,6 +46,15 @@ checksum = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
 
 [[package]]
 name = "base64"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
+name = "base64"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b41b7ea54a0c9d92199de89e20e58d49f02f8e699814ef3fdf266f6f748d15c7"
@@ -55,6 +64,19 @@ name = "base64"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "53d1ccbaf7d9ec9537465a97bf19edc1a4e158ecb49fc16178202238c569cc42"
+
+[[package]]
+name = "bcrypt"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4fd6a91ff640809cfab4ea74312a892238a7bbae53adbf717b71122deb0c85"
+dependencies = [
+ "base64 0.10.1",
+ "blowfish",
+ "byteorder",
+ "lazy_static",
+ "rand 0.7.3",
+]
 
 [[package]]
 name = "bit-set"
@@ -90,12 +112,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-cipher-trait"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c924d49bd09e7c06003acda26cd9742e796e34282ec6c1189404dee0c1f4774"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
 name = "block-padding"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
 dependencies = [
  "byte-tools",
+]
+
+[[package]]
+name = "blowfish"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aeb80d00f2688459b8542068abd974cfb101e7a82182414a99b5026c0d85cc3"
+dependencies = [
+ "block-cipher-trait",
+ "byteorder",
+ "opaque-debug",
 ]
 
 [[package]]
@@ -1770,6 +1812,7 @@ dependencies = [
 name = "tilleuls-webapp"
 version = "0.1.0"
 dependencies = [
+ "bcrypt",
  "calamine",
  "chrono",
  "env_logger",
@@ -1779,6 +1822,7 @@ dependencies = [
  "log 0.4.8",
  "num",
  "num-traits",
+ "rand 0.7.3",
  "reqwest",
  "select",
  "serde",

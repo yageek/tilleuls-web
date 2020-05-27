@@ -5,6 +5,10 @@ use num::rational::{BigRational, Ratio};
 use num::FromPrimitive;
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
+use rand::distributions::Alphanumeric;
+use rand::thread_rng;
+use rand::Rng;
+use std::collections::HashMap;
 #[derive(Serialize, Debug, Clone)]
 pub struct Item {
     title: String,
@@ -87,13 +91,13 @@ impl<'a> OrderItem<'a> {
     }
 }
 #[derive(Debug, Serialize)]
-pub struct OrderPreview<'a> {
+pub struct Cart<'a> {
     order_items: Vec<OrderItem<'a>>,
     total: f64,
 }
 
-impl<'a> OrderPreview<'a> {
-    pub fn new(items: Vec<OrderItem<'a>>) -> OrderPreview<'a> {
+impl<'a> Cart<'a> {
+    pub fn new(items: Vec<OrderItem<'a>>) -> Cart<'a> {
         let total = items
             .iter()
             .map({
@@ -106,13 +110,41 @@ impl<'a> OrderPreview<'a> {
 
         let float_result = total.numer().to_f64().unwrap() / total.denom().to_f64().unwrap();
 
-        OrderPreview {
+        Cart {
             order_items: items,
             total: float_result,
         }
     }
 }
 
+#[derive(Debug)]
+pub struct SessionRegistry<'a> {
+    sessions: HashMap<String, Session<'a>>,
+}
+#[derive(Debug)]
+pub struct Session<'a> {
+    pub cart: Option<Cart<'a>>,
+}
+
+impl<'a> SessionRegistry<'a> {
+    pub fn new() -> Self {
+        SessionRegistry {
+            sessions: HashMap::new(),
+        }
+    }
+
+    pub fn insert_session<'b: 'a>(&mut self, key: String, session: Session<'b>) {
+        self.sessions.insert(key, session);
+    }
+
+    pub fn delete_cart(&mut self, key: &str) {
+        self.sessions.remove(key);
+    }
+
+    pub fn random_key(len: usize) -> String {
+        thread_rng().sample_iter(&Alphanumeric).take(len).collect()
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::{Category, Item, WeeklyBasketOffer};

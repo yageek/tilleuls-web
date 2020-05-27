@@ -16,12 +16,13 @@ use models::WeeklyBasketOffer;
 
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use tokio::runtime::Handle;
 
 #[derive(Debug)]
-struct AppData {
+struct AppData<'a> {
     offer: Option<WeeklyBasketOffer>,
+    sessions: SessionRegistry<'a>,
 }
 
 #[derive(Debug)]
@@ -103,27 +104,30 @@ fn render_order_preview<'a>(
 
 #[tokio::main]
 async fn main() {
-    // Load the templates
-    let app_data_arc = Arc::new(Mutex::new(AppData { offer: None }));
+    // Load the data
+    let app_data_arc = Arc::new(RwLock::new(AppData {
+        offer: None,
+        sessions: SessionRegistry::new(),
+    }));
+
+    // Templates
     let hbs_arc = Arc::new(Render::default());
 
-    // Handle retrieval
+    // XLSX retrieval
     let handle = Handle::current();
     handle.spawn(get_xlsx_data(app_data_arc.clone()));
-
-    // Data for offers
 
     // Register static files
     let fs = warp::path("static").and(warp::fs::dir("www/static"));
 
     // Setup communication
-
     // Get /
 
+    // Load the session
     let app_data = app_data_arc.clone();
     let hbs = hbs_arc.clone();
     let index = warp::path::end().map(move || {
-        let data = app_data.lock().unwrap();
+        let data = app_data.read().unwrap();
 
         if let Some(offer) = &data.offer {
             hbs.render_html("make_order", Some(offer))
@@ -142,13 +146,24 @@ async fn main() {
         .and(warp::body::content_length_limit(1024 * 32))
         .and(warp::body::form())
         .map(move |form: HashMap<String, String>| {
-            let app_data = app_data.lock().unwrap();
-            let items = render_order_preview(&app_data, form);
+            let app_data_x = app_data.write().unwrap();
 
-            let order_preview = OrderPreview::new(items);
+            let items = render_order_preview(&app_data_x, form);
 
-            let string = hbs.render("order_preview", Some(&order_preview));
-            warp::reply::html(string)
+            let order_preview = Cart::new(items);
+            // let string = hbs.render("order_preview", Some(&order_preview));
+
+            let session = Session {
+                cart: Some(order_preview),
+            };
+
+            let key = SessionRegistry::random_key(48);
+            let cookie = format!("TILLEULS_AUTH={}; SameSite=Strict; HttpOpnly", key);
+            app_data_x.sessions.insert_session(key, session);
+
+            warp::http::Response::builder()
+                .header(warp::http::header::SET_COOKIE, cookie)
+                .body(cookie)
         });
 
     // Global routes
@@ -182,12 +197,11 @@ async fn main() {
 
     server.serve(make_svc).await.unwrap();
 }
-
-async fn get_xlsx_data<'a>(data: Arc<Mutex<AppData>>) {
+async fn get_xlsx_data<'a>(data: Arc<RwLock<AppData<'a>>>) {
     info!("Start retrieving xlsx from the server...");
 
     if let Ok(Some(offer)) = retrieve_new_xlsx(None).await {
-        let mut data = data.lock().unwrap();
+        let mut data = data.write().unwrap();
         data.offer = Some(offer);
     }
 }
