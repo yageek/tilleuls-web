@@ -110,14 +110,18 @@ async fn main() {
         sessions: SessionRegistry::new(),
     }));
 
+    // XLSX retrieval
+    let handle = Handle::current();
+    handle.spawn(get_xlsx_data(app_data_arc.clone()));
+
+    // Filters
+    let app_data_filter = warp::any().map(move || app_data_arc.clone());
+    let app_data = move || app_data_filter.clone();
+
     // Templates
     let hbs_arc = Arc::new(Render::default());
     let hbs_filter = warp::any().map(move || hbs_arc.clone());
     let hbs = move || hbs_filter.clone();
-
-    // XLSX retrieval
-    let handle = Handle::current();
-    handle.spawn(get_xlsx_data(app_data_arc.clone()));
 
     // Register static files
     let fs = warp::path("static").and(warp::fs::dir("www/static"));
@@ -126,42 +130,45 @@ async fn main() {
     // Get /
 
     // Load the session
-    let app_data = app_data_arc.clone();
-    let index = warp::path::end().and(hbs()).map(move |hbs: Arc<Render>| {
-        let data = app_data.read().unwrap();
+    let index = warp::path::end().and(hbs()).and(app_data()).map(
+        move |hbs: Arc<Render>, app_data: Arc<RwLock<AppData>>| {
+            let data = app_data.read().unwrap();
 
-        if let Some(offer) = &data.offer {
-            hbs.render_html("make_order", Some(offer))
-        } else {
-            hbs.render_html("index", None)
-        }
-    });
+            if let Some(offer) = &data.offer {
+                hbs.render_html("make_order", Some(offer))
+            } else {
+                hbs.render_html("index", None)
+            }
+        },
+    );
 
     // Get /
-    let app_data = app_data_arc.clone();
-    // let hbs = hbs_arc.clone();
-
     let make_order = warp::path("order")
         .and(warp::post())
         .and(warp::body::content_length_limit(1024 * 32))
         .and(warp::body::form())
         .and(hbs())
-        .map(move |form: HashMap<String, String>, hbs: Arc<Render>| {
-            let app_data_x = app_data.write().unwrap();
+        .and(app_data())
+        .map(
+            move |form: HashMap<String, String>,
+                  hbs: Arc<Render>,
+                  app_data: Arc<RwLock<AppData>>| {
+                let app_data_x = app_data.write().unwrap();
 
-            let items = render_order_preview(&app_data_x, form);
+                let items = render_order_preview(&app_data_x, form);
 
-            let order_preview = Cart::new(items);
-            // let string = hbs.render("order_preview", Some(&order_preview));
+                let order_preview = Cart::new(items);
+                // let string = hbs.render("order_preview", Some(&order_preview));
 
-            let session = Session {
-                cart: Some(order_preview),
-            };
+                let session = Session {
+                    cart: Some(order_preview),
+                };
 
-            let key = SessionRegistry::random_key(48);
-            // app_data_x.sessions.insert_session(key, session);
-            hbs.render_html::<()>("index", None)
-        });
+                let key = SessionRegistry::random_key(48);
+                // app_data_x.sessions.insert_session(key, session);
+                hbs.render_html::<()>("index", None)
+            },
+        );
     // Global routes
     let routes = warp::get().and(fs.or(index)); //.or(make_order);
 
