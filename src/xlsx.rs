@@ -8,7 +8,7 @@ use std::{
 };
 use thiserror::Error;
 
-use super::models::{Category, Item, WeeklyBasketOffer};
+use super::models::{Catalog, Category, Item};
 
 const HEADER: &'static str = "Bon de commande N°";
 const COMMAND_SHEET_NAME: &'static str = "Commande";
@@ -92,7 +92,7 @@ fn read_item_row(cells: &[DataType]) -> Result<Option<Item>, ImportError> {
 }
 
 /// Import and decode on xslx file provided by the farm
-pub fn import_xlsx<R: Read + Seek>(reader: R) -> Result<WeeklyBasketOffer, ImportError> {
+pub fn import_xlsx<R: Read + Seek>(reader: R) -> Result<Catalog, ImportError> {
     let mut workbook = Xlsx::new(reader)?;
     // We validate the known shape of the current formular.
     // For now, we assume one worksheet exists with two elements
@@ -148,7 +148,7 @@ pub fn import_xlsx<R: Read + Seek>(reader: R) -> Result<WeeklyBasketOffer, Impor
         }
     }
 
-    Ok(WeeklyBasketOffer::new(categories))
+    Ok(Catalog::new(categories))
 }
 
 fn has_header(rows: &mut Rows<DataType>) -> bool {

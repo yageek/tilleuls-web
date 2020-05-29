@@ -5,18 +5,24 @@ use num::rational::{BigRational, Ratio};
 use num::FromPrimitive;
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
-use rand::distributions::Alphanumeric;
-use rand::thread_rng;
-use rand::Rng;
+
 use std::collections::HashMap;
+use std::rc::Rc;
+
+/// An Item represents an item within the current
+/// week basket.
 #[derive(Serialize, Debug, Clone)]
 pub struct Item {
+    /// The title of the item
     title: String,
+    /// The ubuying unit of the item
     unit: String,
+    /// The price of the item
     price: f64,
 }
 
 impl Item {
+    /// Creates a new item with some title unit and price
     pub fn new<T: Into<String>, U: Into<String>>(title: T, unit: U, price: f64) -> Item {
         Item {
             title: title.into(),
@@ -25,19 +31,23 @@ impl Item {
         }
     }
 
+    /// Get the price of the item
     pub fn price(&self) -> f64 {
         self.price
     }
 }
 
+/// A category grouping some items
 #[derive(Serialize, Debug)]
 pub struct Category {
+    /// The title of the category
     title: String,
-    items: Vec<Item>,
+    /// The list of items
+    items: Vec<Rc<Item>>,
 }
 
 impl Category {
-    // Creates a new category
+    // Creates a new category with a specific title
     pub fn new<T: Into<String>>(title: T) -> Category {
         Category {
             title: title.into(),
@@ -45,59 +55,69 @@ impl Category {
         }
     }
 
+    /// Add an items to the category
     pub fn add_item(&mut self, item: Item) {
         self.items.push(item);
     }
 
+    /// Retrieves the items of the categories
     pub fn items(&self) -> &[Item] {
         &self.items
     }
 }
+
+/// Catalog groups all the categories available
 #[derive(Serialize, Debug)]
-pub struct WeeklyBasketOffer {
-    #[allow(dead_code)]
+pub struct Catalog {
+    /// The cateogries inside the catalog
     categories: Vec<Category>,
 }
 
-impl WeeklyBasketOffer {
-    pub fn new(categories: Vec<Category>) -> WeeklyBasketOffer {
-        WeeklyBasketOffer { categories }
+impl Catalog {
+    /// Creates a new catalog from the categories
+    pub fn new(categories: Vec<Category>) -> Catalog {
+        Catalog { categories }
     }
 
+    /// Retrieves the categories from the catagalog
     pub fn categories(&self) -> &[Category] {
         &self.categories
     }
 }
 
+/// ItemPickup represents a pickup from someone
+/// with some article.
 #[derive(Debug, Serialize)]
-pub struct OrderItem<'a> {
-    ref_item: &'a Item,
+pub struct ItemPickUp {
+    ref_item: Rc<Item>,
     quantity: u32,
     sub_price: f64,
 }
 
-impl<'a> OrderItem<'a> {
-    pub fn new(item: &'a Item, quantity: u32) -> OrderItem<'a> {
+impl ItemPickUp {
+    /// Creates a new `PickUp` with some quantity
+    pub fn new(item: &Rc<Item>, quantity: u32) -> ItemPickUp {
         let price =
             BigRational::from_f64(item.price()).unwrap() * BigRational::from_u32(quantity).unwrap();
 
         let float_result = price.numer().to_f64().unwrap() / price.denom().to_f64().unwrap();
 
-        OrderItem {
-            ref_item: item,
+        ItemPickUp {
+            ref_item: item.clone(),
             quantity,
             sub_price: float_result,
         }
     }
 }
+
 #[derive(Debug, Serialize)]
-pub struct Cart<'a> {
-    order_items: Vec<OrderItem<'a>>,
+pub struct Cart {
+    pick_ups: Vec<ItemPickUp>,
     total: f64,
 }
 
-impl<'a> Cart<'a> {
-    pub fn new(items: Vec<OrderItem<'a>>) -> Cart<'a> {
+impl Cart {
+    pub fn new(items: Vec<ItemPickUp>) -> Cart {
         let total = items
             .iter()
             .map({
@@ -111,43 +131,15 @@ impl<'a> Cart<'a> {
         let float_result = total.numer().to_f64().unwrap() / total.denom().to_f64().unwrap();
 
         Cart {
-            order_items: items,
+            pick_ups: items,
             total: float_result,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct SessionRegistry<'a> {
-    sessions: HashMap<String, Session<'a>>,
-}
-#[derive(Debug)]
-pub struct Session<'a> {
-    pub cart: Option<Cart<'a>>,
-}
-
-impl<'a> SessionRegistry<'a> {
-    pub fn new() -> Self {
-        SessionRegistry {
-            sessions: HashMap::new(),
-        }
-    }
-
-    pub fn insert_session(&mut self, key: String, session: Session<'a>) {
-        self.sessions.insert(key, session);
-    }
-
-    pub fn delete_cart(&mut self, key: &str) {
-        self.sessions.remove(key);
-    }
-
-    pub fn random_key(len: usize) -> String {
-        thread_rng().sample_iter(&Alphanumeric).take(len).collect()
-    }
-}
 #[cfg(test)]
 mod tests {
-    use super::{Category, Item, WeeklyBasketOffer};
+    use super::{Catalog, Category, Item};
     use chrono::Utc;
     #[test]
     fn create_some_categories() {
@@ -159,7 +151,7 @@ mod tests {
 
         assert_eq!(1, fruits.items.len());
 
-        let offer = WeeklyBasketOffer::new(vec![fruits]);
+        let offer = Catalog::new(vec![fruits]);
         assert_eq!(1, offer.categories.len());
     }
 }

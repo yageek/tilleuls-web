@@ -1,4 +1,4 @@
-use crate::models::WeeklyBasketOffer;
+use crate::models::Catalog;
 use crate::xlsx::{import_xlsx, ImportError};
 use chrono::Utc;
 use reqwest::Response;
@@ -34,7 +34,7 @@ async fn get_page_content() -> Result<CrawlContent, CrawlError> {
     Ok(CrawlContent { response, etag })
 }
 
-async fn week_offer_from_response(response: Response) -> Result<WeeklyBasketOffer, CrawlError> {
+async fn week_offer_from_response(response: Response) -> Result<Catalog, CrawlError> {
     let body = response.bytes().await?;
     let cursor = Cursor::new(body);
     let ok = import_xlsx(cursor)?;
@@ -53,9 +53,7 @@ fn get_link_from_page(text: &str) -> Option<String> {
     candidates.last().map(|x| x.to_string())
 }
 
-pub async fn retrieve_new_xlsx(
-    previous_etag: Option<&str>,
-) -> Result<Option<WeeklyBasketOffer>, CrawlError> {
+pub async fn retrieve_new_xlsx(previous_etag: Option<&str>) -> Result<Option<Catalog>, CrawlError> {
     //
     let content = get_page_content().await?;
 

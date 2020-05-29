@@ -1,5 +1,6 @@
 mod crawl_page;
 mod models;
+mod sessions;
 mod xlsx;
 
 use chrono::{Date, Utc};
@@ -12,17 +13,25 @@ use warp::{reject::Reject, Filter};
 use crate::models::*;
 use crawl_page::*;
 use handlebars::Handlebars;
-use models::WeeklyBasketOffer;
+use models::Catalog;
 
 use serde::Serialize;
+use sessions::{SessionRegistry, UserSession};
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio::runtime::Handle;
 
 #[derive(Debug)]
-struct AppData<'a> {
-    offer: Option<WeeklyBasketOffer>,
-    sessions: SessionRegistry<'a>,
+struct AppData {
+    offer: Option<Catalog>,
+    sessions: SessionRegistry,
+}
+
+impl AppData {
+    pub fn insert_session(&mut self, session: UserSession) {
+        self.sessions.insert_session(session);
+    }
 }
 
 #[derive(Debug)]
@@ -70,13 +79,10 @@ impl<'a> Render<'a> {
     }
 }
 
-fn render_order_preview<'a>(
-    app_data: &'a AppData,
-    form: HashMap<String, String>,
-) -> Vec<OrderItem<'a>> {
+fn render_order_preview(app_data: &AppData, form: HashMap<String, String>) -> Vec<ItemPickUp> {
     if let Some(offer) = &app_data.offer {
         // Retrieve all_elements
-        let orders: Vec<OrderItem<'_>> = form
+        let orders: Vec<ItemPickUp> = form
             .iter()
             .filter_map(|(key, value)| {
                 // Items
@@ -91,7 +97,7 @@ fn render_order_preview<'a>(
                         &offer.categories()[indexes[0] as usize].items()[indexes[1] as usize];
                     let quantity = value.parse::<u32>().unwrap();
 
-                    Some(OrderItem::new(item, quantity))
+                    Some(ItemPickUp::new(item, quantity))
                 } else {
                     None
                 }
@@ -143,32 +149,41 @@ async fn main() {
     );
 
     // Get /
-    let make_order = warp::path("order")
-        .and(warp::post())
-        .and(warp::body::content_length_limit(1024 * 32))
-        .and(warp::body::form())
-        .and(hbs())
-        .and(app_data())
-        .map(
-            move |form: HashMap<String, String>,
-                  hbs: Arc<Render>,
-                  app_data: Arc<RwLock<AppData>>| {
-                let app_data_x = app_data.write().unwrap();
+    // let make_order = warp::path("order")
+    //     .and(warp::post())
+    //     .and(warp::body::content_length_limit(1024 * 32))
+    //     .and(warp::body::form())
+    //     .and(hbs())
+    //     .and(app_data())
+    //     .map(
+    //         move |form: HashMap<String, String>,
+    //               hbs: Arc<Render>,
+    //               app_data: Arc<RwLock<AppData>>| {
+    //             // We need to generate the cart from the provided info
 
-                let items = render_order_preview(&app_data_x, form);
+    //             let app_data_write = app_data.clone();
 
-                let order_preview = Cart::new(items);
-                // let string = hbs.render("order_preview", Some(&order_preview));
+    //             let app_data_read = app_data.read().unwrap();
 
-                let session = Session {
-                    cart: Some(order_preview),
-                };
+    //             // let app_data_imut = app_data_cell.borrow();
 
-                let key = SessionRegistry::random_key(48);
-                // app_data_x.sessions.insert_session(key, session);
-                hbs.render_html::<()>("index", None)
-            },
-        );
+    //             let items = render_order_preview(&app_data_read, form);
+    //             let cart = Cart::new(items);
+
+    //             // Generate template
+    //             let template_response = hbs.render("order_preview", Some(&cart));
+
+    //             // // Create session
+    //             let session_rc = UserSession::new(cart);
+    //             app_data_write.write().unwrap().insert_session(session_rc);
+    //             // Returns the response
+    //             template_response
+
+    //             // let mut app_data = &mut *app_data.write().unwrap();
+    //             // // let mut app_data_mut = Rc::make_mut(&mut app_data_rc);
+    //             // app_data.new_session(cart);
+    //         },
+    //     );
     // Global routes
     let routes = warp::get().and(fs.or(index)); //.or(make_order);
 
@@ -201,11 +216,11 @@ async fn main() {
     server.serve(make_svc).await.unwrap();
 }
 
-async fn get_xlsx_data<'a>(data: Arc<RwLock<AppData<'a>>>) {
+async fn get_xlsx_data(data: Arc<RwLock<AppData>>) {
     info!("Start retrieving xlsx from the server...");
 
     if let Ok(Some(offer)) = retrieve_new_xlsx(None).await {
-        let mut data = data.write().unwrap();
+        let mut data = &*data.clone().write().unwrap();
         data.offer = Some(offer);
     }
 }
