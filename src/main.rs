@@ -3,7 +3,6 @@ mod models;
 mod sessions;
 mod xlsx;
 
-use chrono::{Date, Utc};
 use hyper::server::Server;
 use listenfd::ListenFd;
 use log::info;
@@ -17,7 +16,6 @@ use models::Catalog;
 
 use serde::Serialize;
 use sessions::{SessionRegistry, UserSession};
-use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio::runtime::Handle;
@@ -25,15 +23,7 @@ use tokio::runtime::Handle;
 #[derive(Debug)]
 struct AppData {
     offer: Option<Catalog>,
-    sessions: SessionRegistry,
 }
-
-impl AppData {
-    pub fn insert_session(&mut self, session: UserSession) {
-        self.sessions.insert_session(session);
-    }
-}
-
 #[derive(Debug)]
 enum DataError {
     NotFound,
@@ -111,10 +101,8 @@ fn render_order_preview(app_data: &AppData, form: HashMap<String, String>) -> Ve
 #[tokio::main]
 async fn main() {
     // Load the data
-    let app_data_arc = Arc::new(RwLock::new(AppData {
-        offer: None,
-        sessions: SessionRegistry::new(),
-    }));
+    let sessions_registry = Arc::new(RwLock::new(sessions::SessionRegistry::new()));
+    let app_data_arc = Arc::new(RwLock::new(AppData { offer: None }));
 
     // XLSX retrieval
     let handle = Handle::current();
@@ -128,6 +116,11 @@ async fn main() {
     let hbs_arc = Arc::new(Render::default());
     let hbs_filter = warp::any().map(move || hbs_arc.clone());
     let hbs = move || hbs_filter.clone();
+
+    // Sessions
+
+    let sessions_filter = warp::any().map(move || sessions_registry.clone());
+    let sess = move || sessions_filter.clone();
 
     // Register static files
     let fs = warp::path("static").and(warp::fs::dir("www/static"));
@@ -149,43 +142,40 @@ async fn main() {
     );
 
     // Get /
-    // let make_order = warp::path("order")
-    //     .and(warp::post())
-    //     .and(warp::body::content_length_limit(1024 * 32))
-    //     .and(warp::body::form())
-    //     .and(hbs())
-    //     .and(app_data())
-    //     .map(
-    //         move |form: HashMap<String, String>,
-    //               hbs: Arc<Render>,
-    //               app_data: Arc<RwLock<AppData>>| {
-    //             // We need to generate the cart from the provided info
+    let make_order = warp::path("order")
+        .and(warp::post())
+        .and(warp::body::content_length_limit(1024 * 32))
+        .and(warp::body::form())
+        .and(hbs())
+        .and(sess())
+        .and(app_data())
+        .map(
+            move |form: HashMap<String, String>,
+                  hbs: Arc<Render>,
+                  sess: Arc<RwLock<SessionRegistry>>,
+                  app_data: Arc<RwLock<AppData>>| {
+                // We need to generate the cart from the provided info
 
-    //             let app_data_write = app_data.clone();
+                let app_data = app_data.read().unwrap();
+                let items = render_order_preview(&app_data, form);
+                let cart = Cart::new(items);
 
-    //             let app_data_read = app_data.read().unwrap();
+                // Generate template
+                let template_response = hbs.render("order_preview", Some(&cart));
 
-    //             // let app_data_imut = app_data_cell.borrow();
+                // // Create session
+                // let session_rc = UserSession::new(cart);
+                // app_data_write.write().unwrap().insert_session(session_rc);
+                // Returns the response
+                warp::reply::html(template_response)
 
-    //             let items = render_order_preview(&app_data_read, form);
-    //             let cart = Cart::new(items);
-
-    //             // Generate template
-    //             let template_response = hbs.render("order_preview", Some(&cart));
-
-    //             // // Create session
-    //             let session_rc = UserSession::new(cart);
-    //             app_data_write.write().unwrap().insert_session(session_rc);
-    //             // Returns the response
-    //             template_response
-
-    //             // let mut app_data = &mut *app_data.write().unwrap();
-    //             // // let mut app_data_mut = Rc::make_mut(&mut app_data_rc);
-    //             // app_data.new_session(cart);
-    //         },
-    //     );
+                // let mut app_data = &mut *app_data.write().unwrap();
+                // // let mut app_data_mut = Rc::make_mut(&mut app_data_rc);
+                // app_data.new_session(cart);
+            },
+        );
     // Global routes
-    let routes = warp::get().and(fs.or(index)); //.or(make_order);
+    let routes = warp::get().and(fs.or(index)).or(make_order);
 
     // Hot reload
 
@@ -220,7 +210,7 @@ async fn get_xlsx_data(data: Arc<RwLock<AppData>>) {
     info!("Start retrieving xlsx from the server...");
 
     if let Ok(Some(offer)) = retrieve_new_xlsx(None).await {
-        let mut data = &*data.clone().write().unwrap();
+        let mut data = &mut *data.write().unwrap();
         data.offer = Some(offer);
     }
 }

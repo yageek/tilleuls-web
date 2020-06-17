@@ -5,12 +5,12 @@ use rand::Rng;
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct UserSession {
+pub struct UserSession<'a> {
     id: String,
-    cart: Option<Cart>,
+    cart: Option<Cart<'a>>,
 }
 
-impl UserSession {
+impl<'a> UserSession<'a> {
     fn random_key(len: usize) -> String {
         thread_rng().sample_iter(&Alphanumeric).take(len).collect()
     }
@@ -19,13 +19,13 @@ impl UserSession {
         &self.id
     }
 
-    pub fn set_cart(&mut self, cart: Cart) {
+    pub fn set_cart(&mut self, cart: Cart<'a>) {
         self.cart = Some(cart);
     }
 }
 
-impl UserSession {
-    pub fn new(cart: Cart) -> Self {
+impl<'a> UserSession<'a> {
+    pub fn new(cart: Cart<'a>) -> Self {
         UserSession {
             cart: Some(cart),
             id: UserSession::random_key(48),
@@ -34,18 +34,18 @@ impl UserSession {
 }
 
 #[derive(Debug)]
-pub struct SessionRegistry {
-    sessions: HashMap<String, UserSession>,
+pub struct SessionRegistry<'a> {
+    sessions: HashMap<String, UserSession<'a>>,
 }
 
-impl<'a> SessionRegistry {
+impl<'a> SessionRegistry<'a> {
     pub fn new() -> Self {
         SessionRegistry {
             sessions: HashMap::new(),
         }
     }
 
-    pub fn insert_session(&mut self, session: UserSession) {
+    pub fn insert_session(&mut self, session: UserSession<'a>) {
         self.sessions.insert(session.id().to_owned(), session);
     }
 

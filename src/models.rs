@@ -7,7 +7,7 @@ use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
 
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 /// An Item represents an item within the current
 /// week basket.
@@ -43,7 +43,7 @@ pub struct Category {
     /// The title of the category
     title: String,
     /// The list of items
-    items: Vec<Rc<Item>>,
+    items: Vec<Item>,
 }
 
 impl Category {
@@ -57,7 +57,7 @@ impl Category {
 
     /// Add an items to the category
     pub fn add_item(&mut self, item: Item) {
-        self.items.push(item);
+        self.items.push(item.clone());
     }
 
     /// Retrieves the items of the categories
@@ -88,22 +88,22 @@ impl Catalog {
 /// ItemPickup represents a pickup from someone
 /// with some article.
 #[derive(Debug, Serialize)]
-pub struct ItemPickUp {
-    ref_item: Rc<Item>,
+pub struct ItemPickUp<'a> {
+    ref_item: &'a Item,
     quantity: u32,
     sub_price: f64,
 }
 
-impl ItemPickUp {
+impl<'a> ItemPickUp<'a> {
     /// Creates a new `PickUp` with some quantity
-    pub fn new(item: &Rc<Item>, quantity: u32) -> ItemPickUp {
+    pub fn new(item: &'a Item, quantity: u32) -> ItemPickUp {
         let price =
             BigRational::from_f64(item.price()).unwrap() * BigRational::from_u32(quantity).unwrap();
 
         let float_result = price.numer().to_f64().unwrap() / price.denom().to_f64().unwrap();
 
         ItemPickUp {
-            ref_item: item.clone(),
+            ref_item: item,
             quantity,
             sub_price: float_result,
         }
@@ -111,12 +111,12 @@ impl ItemPickUp {
 }
 
 #[derive(Debug, Serialize)]
-pub struct Cart {
-    pick_ups: Vec<ItemPickUp>,
+pub struct Cart<'a> {
+    pick_ups: Vec<ItemPickUp<'a>>,
     total: f64,
 }
 
-impl Cart {
+impl<'a> Cart<'a> {
     pub fn new(items: Vec<ItemPickUp>) -> Cart {
         let total = items
             .iter()
